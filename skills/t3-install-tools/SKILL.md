@@ -55,7 +55,7 @@ PINNED = {
  "tools/thread-match.js": ["thread-match.js", "4127b89c1a4235c970e02bf450d227402ed4bf6d98b927e148463c1352918113"],
  "tools/t3ctl": ["t3ctl", "a72400871c4ed86aece4712db083d9d01406248d87d48fd9785cf9047fc0028d"],
  "tools/windows/t3ctl.cmd": ["t3ctl.cmd", "b53d3a36313f6d78c4feeba028823c836b3e64e3b42a5b33ea4a6fe73be30d6e"],
- "tools/t3listen": ["t3listen", "bbc2d1bae4a6001532795f3b4ad6c491b0520fe512fef684fb99b8e02c9623ba"],
+ "tools/t3listen": ["t3listen", "f150d360e3d89ed91b4221f5bbf23ffcf18207b3a0e06cc09b370e0da9409064"],
  "tools/windows/t3listen.cmd": ["t3listen.cmd", "2a818c7c0471268de6b065ac20e08ff849a6262d07752160ee651a29286abcf5"],
  "tools/export.js": ["export.js", "666093930cf3f2cafa270e7859635d243e81e490d4d8fee4f89da8e1c522773b"],
  "tools/survey.js": ["survey.js", "2b7626993882eb6fccfef6bca90d366c8c3a3bc54542013e99882f36890047a1"],

@@ -894,14 +894,15 @@ setInterval(() => {
 
 // T3 answers each Ping, so three heartbeats of silence mean the connection is dead. On a half-open socket Node's WebSocket
 // stays CLOSING after close() and onclose never fires, so nothing would reconnect. A close that hasn't finished within
-// CLOSE_GRACE_MS ends the process with code 1: launchd and systemd start a fresh listener, and its catch-up covers the gap.
+// CLOSE_GRACE_MS ends the process with code 1: launchd, systemd and the Windows logon task (RestartCount 3) start a fresh
+// listener, and its catch-up covers the gap.
 const HEARTBEAT_MS = +process.env.T3LISTEN_HEARTBEAT_MS || 25000, SILENT_MS = 3 * HEARTBEAT_MS, CLOSE_GRACE_MS = Math.min(5000, HEARTBEAT_MS);
-const UNHEALTHY_EVERY_MS = 3600e3, MAX_STARTS_PER_HOUR = 3;
+const UNHEALTHY_EVERY_MS = 3600e3, MAX_STARTS_PER_HOUR = 3, startsLastHour = (st, now = Date.now()) => (st.starts || []).filter((t) => t > now - 3600e3);
 // listener.unhealthy goes to the main bot only, at most once an hour, so a T3 that keeps going silent doesn't flood the chat
 async function reportUnhealthy(reason, detail) {
   if (Date.now() - (+S.unhealthyAt || 0) < UNHEALTHY_EVERY_MS) return;
   const e = { event: "listener.unhealthy", kind: "listener-unhealthy", machine: C.machine, reason, lastAlive: S.lastAlive ? new Date(S.lastAlive).toISOString() : null,
-    startsLastHour: (S.starts || []).length, text: `T3 Tots listener unhealthy on ${C.machine}: ${detail}`, sentAt: new Date().toISOString(), eventId: crypto.randomUUID() };
+    startsLastHour: startsLastHour(S).length, text: `T3 Tots listener unhealthy on ${C.machine}: ${detail}`, sentAt: new Date().toISOString(), eventId: crypto.randomUUID() };
   if (DRY) return log("DRY-RUN payload " + JSON.stringify(e));
   const r = await post(e, { config: C });
   log(r.ok ? `sent listener.unhealthy (${reason}) -> HTTP ${r.status}` : `listener.unhealthy (${reason}) not sent: ${r.status ? `webhook answered HTTP ${r.status}` : `webhook not reachable (${r.body})`}`);
@@ -994,7 +995,7 @@ async function run() {
     for (const st of [S, ...Object.values(S.bots)]) if (st.sending) { st.missed = mergeMissed({ ...newMissed(), ...st.sending }, { ...newMissed(), ...st.missed }); delete st.sending; }
     for (const st of Object.values(S.bots)) st.pausedUntil = Math.min(+st.pausedUntil || 0, Date.now() + 864e5);
     for (const s of Object.values(S.sent)) { delete s.parked; delete s.e; delete s.retryLater; } for (const f2 of Object.values(S.finished)) { delete f2.parked; delete f2.retryLater; }
-    const now = Date.now(); S.starts = [...(S.starts || []).filter((t) => t > now - 3600e3), now]; saveState(); // starts in the last hour, for listener.unhealthy
+    S.starts = [...startsLastHour(S), Date.now()]; saveState(); // for listener.unhealthy
   }
   syncBots();
   if (!DRY) fs.watchFile(CONF, { interval: 2000, persistent: false }, (now, before) => { if (now.mtimeMs !== before.mtimeMs) reloadBots(); });
@@ -1131,7 +1132,7 @@ function status() {
   else { if (fs.existsSync(unitPath())) inst = "systemd user unit"; const r = tryRun("systemctl", ["--user", "show", "-p", "MainPID", "--value", unitName()]); if (r.ok && +r.out.trim() > 0) { running = true; pid = +r.out.trim(); } }
   if (!running) { const p = +(fs.existsSync(PID) && fs.readFileSync(PID, "utf8")); if (p && pidIsListener(p)) { running = true; pid = p; } }
   const st = readJSON(STATE, { sent: {} }), open = Object.values(st.sent || {}).filter((s) => !s.skipped).length;
-  const mins = Math.round((Date.now() - st.lastAlive) / 60000), starts = (st.starts || []).filter((t) => t > Date.now() - 3600e3).length;
+  const mins = Math.round((Date.now() - st.lastAlive) / 60000), starts = startsLastHour(st).length;
   const alive = st.lastAlive ? `${localTime(new Date(st.lastAlive).toISOString())} (${mins < 1 ? "under a minute" : `${mins} min`} ago; the last message from T3)` : "never";
   let tail = ""; try { tail = fs.readFileSync(LOG, "utf8").trim().split("\n").slice(-3).join("\n"); } catch {}
   console.log(`autostart: ${inst}\nrunning: ${running ? `yes (pid ${pid})` : "no"}\nlast alive: ${alive}\nstarts in the last hour: ${starts}\nconfig: ${fs.existsSync(CONF) ? "listen.json present" : "no listen.json yet"}\napprovals: ${approvalsLine(readJSON(CONF, {}).approvals === true, /--approvals\b/.test(serviceArgs()))}\nfilters: ${filtersLine((readJSON(CONF, {}) || {}).filters)}\nlistener settings: ${settingsLine(readJSON(CONF, {}) || {})}\nbots:\n${botLines(readJSON(CONF, {}) || {}).map((l) => "  " + l).join("\n")}\nopen questions sent: ${open}${tail ? `\nlast log lines:\n${tail}` : ""}`);

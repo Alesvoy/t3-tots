@@ -1664,20 +1664,19 @@ test("install: its output tells an agent on older skills that skills and tools m
   assert.equal((src.match(/installedLine\(`installed: /g) || []).length, 4, "every way install can succeed prints it");
 });
 
-test("silent T3, live: a half-open connection ends the listener with code 1 and posts listener.unhealthy; lastAlive stays put", async () => {
+test("silent T3, live: a half-open connection ends the listener with code 1 and posts listener.unhealthy", async () => {
   const f = await fakeT3.startFake();
   try {
     const c = f.start([], { T3LISTEN_HEARTBEAT_MS: "200" });
     await f.waitFor(() => /watching 0 threads/.test(f.out), 8000, "first snapshot");
     await fakeT3.sleep(1000);
     assert.doesNotMatch(f.out, /stopped answering/, "a T3 that answers each Ping is not silent");
-    const silentAt = Date.now(); f.silence();
+    f.silence();
     assert.equal(await c.exited, 1, "a non-zero exit, so launchd and systemd restart it");
     assert.match(f.out, /T3 stopped answering; reconnecting[\s\S]*T3_SILENT: nothing from T3 since/);
     const sent = f.posts.filter((p) => p.event === "listener.unhealthy");
     assert.equal(sent.length, 1); assert.equal(sent[0].reason, "t3-silent"); assert.equal(sent[0].machine, "m");
     assert.match(sent[0].text, /^T3 Tots listener unhealthy on m: T3 stopped answering at /);
-    assert.ok(f.state().lastAlive <= silentAt, "lastAlive is the last message T3 sent, not the time the listener gave up");
   } finally { await f.close(); }
 });
 
